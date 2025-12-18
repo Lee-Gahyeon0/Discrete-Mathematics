@@ -10,10 +10,10 @@ def is_atom(value):
 
 def is_not(value):
     return (
-        isinstance(value, tuple)
-        and len(value) == 2
-        and value[0] == "NOT"
-        and is_atom(value[1])
+            isinstance(value, tuple)
+            and len(value) == 2
+            and value[0] == "NOT"
+            and is_atom(value[1])
     )
 
 
@@ -157,6 +157,7 @@ class KB:
                     if new_or not in self.facts:
                         derived.append(new_or)
         return derived
+
     def rule_destructive_dilemma(self) -> List[Expr]:
         # === QUIZ: implement destructive dilemma ===
         # (not Q OR not S), P->Q, R->S => (not P OR not R)
@@ -209,8 +210,11 @@ class KB:
             changed = False
             for f in new_facts:
                 if self.add_fact(f): changed = True
+
             for r in new_rules:
-                if self.add_rule(r): changed = True
+                if r not in self.rules:
+                    self.rules.append(r)
+                    changed = True
 
             if not changed:
                 break
