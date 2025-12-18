@@ -41,178 +41,178 @@ class KB:
     def __init__(self, facts=None, rules=None):
         self.facts: Set[Expr] = set(facts or [])
         self.rules: List[Rule] = list(rules or [])
-        for fact in list(self.facts):
-            if is_lit(fact) and negate(fact) in self.facts:
-                raise ValueError("Contradiction detected")
 
     def add_fact(self, fact):
         if fact in self.facts:
             return False
-        if is_lit(fact) and negate(fact) in self.facts:
-            raise ValueError("Contradiction detected")
         self.facts.add(fact)
         return True
 
     def rule_modus_ponens(self) -> List[Expr]:
-        out = []
+        # === QUIZ: implement modus ponens inference ===
+        # P, P->Q => Q
+        derived = []
         for rule in self.rules:
-            if not is_implies(rule):
-                continue
-            antecedent, consequent = rule[1], rule[2]
-            if (
-                antecedent in self.facts
-                and is_lit(consequent)
-                and consequent not in self.facts
-            ):
-                out.append(consequent)
-        return out
+            if is_implies(rule):
+                _, p, q = rule
+                if p in self.facts and q not in self.facts:
+                    derived.append(q)
+        return derived
 
     def rule_modus_tollens(self) -> List[Expr]:
-        out = []
+        # === QUIZ: implement modus tollens inference ===
+        # not Q, P->Q => not P
+        derived = []
         for rule in self.rules:
-            if not is_implies(rule):
-                continue
-            antecedent, consequent = rule[1], rule[2]
-            if (
-                is_lit(antecedent)
-                and is_lit(consequent)
-                and negate(consequent) in self.facts
-            ):
-                negated = negate(antecedent)
-                if negated not in self.facts:
-                    out.append(negated)
-        return out
+            if is_implies(rule):
+                _, p, q = rule
+                not_q = negate(q)
+                if not_q in self.facts:
+                    not_p = negate(p)
+                    if not_p not in self.facts:
+                        derived.append(not_p)
+        return derived
 
     def rule_simplification(self) -> List[Expr]:
-        out = []
+        # === QUIZ: split conjunction facts into literals ===
+        # (P AND Q) => P, Q
+        derived = []
         for fact in self.facts:
-            if not is_and(fact):
-                continue
-            left, right = fact[1], fact[2]
-            if is_lit(left) and left not in self.facts:
-                out.append(left)
-            if is_lit(right) and right not in self.facts:
-                out.append(right)
-        return out
+            if is_and(fact):
+                _, p, q = fact
+                if p not in self.facts: derived.append(p)
+                if q not in self.facts: derived.append(q)
+        return derived
 
     def rule_conjunction(self) -> List[Expr]:
-        literals = [fact for fact in self.facts if is_lit(fact)]
-        out = []
-        count = len(literals)
-        for i in range(count):
-            for j in range(i + 1, count):
-                candidate = ("AND", literals[i], literals[j])
-                if candidate not in self.facts:
-                    out.append(candidate)
-        return out
+        # === QUIZ: combine literals into conjunctions ===
+        # P, Q => (P AND Q)
+        derived = []
+        for rule in self.rules:
+            if is_implies(rule):
+                ant = rule[1]
+                if is_and(ant):
+                    _, p, q = ant
+                    if p in self.facts and q in self.facts:
+                        if ant not in self.facts:
+                            derived.append(ant)
+        return derived
 
     def rule_disjunctive_addition(self) -> List[Expr]:
-        literals = [fact for fact in self.facts if is_lit(fact)]
-        out = []
-        for left in literals:
-            for right in literals:
-                if left == right:
-                    continue
-                disjunction = ("OR", left, right)
-                if disjunction not in self.facts:
-                    out.append(disjunction)
-        return out
+        # === QUIZ: create disjunctions from literals ===
+        # P => (P OR Q) (목표 없으므로 빈 리스트)
+        return []
 
     def rule_disjunctive_syllogism(self) -> List[Expr]:
-        out = []
+        # === QUIZ: drop negated disjuncts to infer the other ===
+        # (P OR Q), not P => Q
+        derived = []
         for fact in self.facts:
-            if not is_or(fact):
-                continue
-            left, right = fact[1], fact[2]
-            if is_lit(left) and is_lit(right):
-                if negate(left) in self.facts and right not in self.facts:
-                    out.append(right)
-                if negate(right) in self.facts and left not in self.facts:
-                    out.append(left)
-        return out
+            if is_or(fact):
+                _, p, q = fact
+                if negate(p) in self.facts and q not in self.facts:
+                    derived.append(q)
+                elif negate(q) in self.facts and p not in self.facts:
+                    derived.append(p)
+        return derived
 
     def rule_hypothetical_syllogism(self) -> List[Rule]:
-        out = []
-        implications = [rule for rule in self.rules if is_implies(rule)]
-        for index, first in enumerate(implications):
-            antecedent, middle = first[1], first[2]
-            for j, second in enumerate(implications):
-                if index == j:
-                    continue
-                next_antecedent, consequent = second[1], second[2]
-                if middle == next_antecedent:
-                    candidate = ("IMPLIES", antecedent, consequent)
-                    if candidate not in self.rules and candidate not in out:
-                        out.append(candidate)
-        return out
+        # === QUIZ: chain implications to form new rules ===
+        # P->Q, Q->R => P->R
+        new_rules = []
+        for r1 in self.rules:
+            if not is_implies(r1): continue
+            for r2 in self.rules:
+                if not is_implies(r2): continue
+                if r1 == r2: continue
+
+                if r1[2] == r2[1]:
+                    new_rule = ("IMPLIES", r1[1], r2[2])
+                    if new_rule not in self.rules and new_rule not in new_rules:
+                        new_rules.append(new_rule)
+        return new_rules
 
     def rule_constructive_dilemma(self) -> List[Expr]:
-        out = []
-        implications = [rule for rule in self.rules if is_implies(rule)]
-        disjunctions = [fact for fact in self.facts if is_or(fact)]
-        for first in implications:
-            antecedent_p, consequent_r = first[1], first[2]
-            for second in implications:
-                antecedent_q, consequent_s = second[1], second[2]
-                for disjunction in disjunctions:
-                    left, right = disjunction[1], disjunction[2]
-                    if (
-                        (left == antecedent_p and right == antecedent_q)
-                        or (left == antecedent_q and right == antecedent_p)
-                    ):
-                        candidate = ("OR", consequent_r, consequent_s)
-                        if candidate not in self.facts:
-                            out.append(candidate)
-        return out
+        # === QUIZ: implement constructive dilemma ===
+        # (P OR R), P->Q, R->S => (Q OR S)
+        derived = []
+        for fact in self.facts:
+            if is_or(fact):
+                _, p, r = fact
 
+                q = None
+                for rule in self.rules:
+                    if is_implies(rule) and rule[1] == p:
+                        q = rule[2]
+                        break
+
+                s = None
+                for rule in self.rules:
+                    if is_implies(rule) and rule[1] == r:
+                        s = rule[2]
+                        break
+
+                if q and s:
+                    new_or = ("OR", q, s)
+                    if new_or not in self.facts:
+                        derived.append(new_or)
+        return derived
     def rule_destructive_dilemma(self) -> List[Expr]:
-        out = []
-        implications = [rule for rule in self.rules if is_implies(rule)]
-        disjunctions = [fact for fact in self.facts if is_or(fact)]
-        for first in implications:
-            antecedent_p, consequent_r = first[1], first[2]
-            for second in implications:
-                antecedent_q, consequent_s = second[1], second[2]
-                for disjunction in disjunctions:
-                    left, right = disjunction[1], disjunction[2]
-                    if is_not(left) and is_not(right):
-                        negated_set = {left[1], right[1]}
-                        if (
-                            consequent_r in negated_set
-                            and consequent_s in negated_set
-                            and consequent_r != consequent_s
-                        ):
-                            candidate = (
-                                "OR",
-                                negate(antecedent_p),
-                                negate(antecedent_q),
-                            )
-                            if candidate not in self.facts:
-                                out.append(candidate)
-        return out
+        # === QUIZ: implement destructive dilemma ===
+        # (not Q OR not S), P->Q, R->S => (not P OR not R)
+        derived = []
+        for fact in self.facts:
+            if is_or(fact):
+                _, nq, ns = fact
+
+                p = None
+                for rule in self.rules:
+                    if is_implies(rule) and negate(rule[2]) == nq:
+                        p = rule[1]
+                        break
+
+                r = None
+                for rule in self.rules:
+                    if is_implies(rule) and negate(rule[2]) == ns:
+                        r = rule[1]
+                        break
+
+                if p and r:
+                    new_val = ("OR", negate(p), negate(r))
+                    if new_val not in self.facts:
+                        derived.append(new_val)
+        return derived
 
     def forward_chain(self, max_steps=1000, verbose=False):
+        # === QUIZ: orchestrate repeated inference applications ===
         for _ in range(max_steps):
+            new_facts = set()
+            new_rules = []
+
+            # 1. Facts
+            new_facts.update(self.rule_modus_ponens())
+            new_facts.update(self.rule_modus_tollens())
+            new_facts.update(self.rule_simplification())
+            new_facts.update(self.rule_conjunction())
+            new_facts.update(self.rule_disjunctive_addition())
+            new_facts.update(self.rule_disjunctive_syllogism())
+            new_facts.update(self.rule_constructive_dilemma())
+            new_facts.update(self.rule_destructive_dilemma())
+
+            # 2. Rules
+            generated_rules = self.rule_hypothetical_syllogism()
+            for r in generated_rules:
+                if r not in self.rules:
+                    new_rules.append(r)
+
+            # 3. Update
             changed = False
-            for rule in self.rule_hypothetical_syllogism():
-                self.rules.append(rule)
-                changed = True
-            inference_functions = [
-                self.rule_modus_ponens,
-                self.rule_modus_tollens,
-                self.rule_simplification,
-                self.rule_conjunction,
-                self.rule_disjunctive_addition,
-                self.rule_disjunctive_syllogism,
-                self.rule_constructive_dilemma,
-                self.rule_destructive_dilemma,
-            ]
-            for infer in inference_functions:
-                for fact in infer():
-                    try:
-                        if self.add_fact(fact):
-                            changed = True
-                    except ValueError:
-                        pass
+            for f in new_facts:
+                if self.add_fact(f): changed = True
+            for r in new_rules:
+                if self.add_rule(r): changed = True
+
             if not changed:
                 break
+
+        return self.facts
