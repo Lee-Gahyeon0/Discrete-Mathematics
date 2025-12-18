@@ -1,0 +1,15 @@
+reasoner_quiz/.venv/
+.idea/
+__pycache__/
+
+.pytest_cache/
+
+.coverage
+htmlcov/
+coverage.xml
+
+pytest-debug.log
+
+.venv/
+*.iml
+*.xml
