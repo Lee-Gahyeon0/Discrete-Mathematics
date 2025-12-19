@@ -113,19 +113,19 @@ def parse_query(text: str) -> Fact:
 
 
 def main() -> None:
-    # === QUIZ: build Streamlit UI that wires parsing to the KB ===
     st.set_page_config(page_title="Logic Reasoner", layout="wide")
-    st.title("🧠 Stage 6 — Streamlit KB UI")
+    st.title("Stage 6 — Streamlit KB UI")
 
-    # 사이드바: 샘플 데이터 로드 기능
     with st.sidebar:
         st.header("설정 (Settings)")
         if st.button("샘플 데이터 로드 (Load Sample)"):
             st.session_state["f_input"] = DEFAULT_FACTS
             st.session_state["r_input"] = DEFAULT_RULES
             st.session_state["q_input"] = DEFAULT_QUERY
+        if st.button("결과 초기화 (Clear Results)"):
+            st.session_state.pop("last_facts", None)
+            st.session_state.pop("last_query_results", None)
 
-    # 세션 상태 초기화
     if "f_input" not in st.session_state:
         st.session_state["f_input"] = DEFAULT_FACTS
     if "r_input" not in st.session_state:
@@ -133,54 +133,83 @@ def main() -> None:
     if "q_input" not in st.session_state:
         st.session_state["q_input"] = DEFAULT_QUERY
 
-    # 3단 컬럼 레이아웃: Facts | Rules | Query
-    col1, col2, col3 = st.columns(3)
+    left, right = st.columns([1.2, 1])
 
-    with col1:
-        facts_text = st.text_area("📝 Facts (사실)", value=st.session_state["f_input"], height=250)
-    with col2:
-        rules_text = st.text_area("📜 Rules (규칙)", value=st.session_state["r_input"], height=250)
-    with col3:
-        query_text = st.text_input("❓ Query (질의)", value=st.session_state["q_input"])
-        st.write("")  # 간격 띄우기
-        run_button = st.button("🚀 추론 실행 (Run Inference)", type="primary", use_container_width=True)
+    # --- 입력 영역 (왼쪽) ---
+    with left:
+        st.subheader("입력 (Input)")
 
-    # 실행 버튼 클릭 시 처리
-    if run_button:
-        try:
-            # 1. 입력 파싱
-            parsed_facts = parse_facts_block(facts_text)
-            parsed_rules = parse_rules_block(rules_text)
-            parsed_query = parse_query(query_text)
+        with st.form("kb_form", clear_on_submit=False):
+            f_col, r_col = st.columns(2)
 
-            # 2. KB 생성 및 추론 (Forward Chaining)
-            kb = KB(facts=parsed_facts, rules=parsed_rules)
-            kb.forward_chain()
+            with f_col:
+                facts_text = st.text_area(
+                    "Facts (사실)",
+                    value=st.session_state["f_input"],
+                    height=280,
+                )
 
-            st.success("추론이 성공적으로 완료되었습니다!")
+            with r_col:
+                rules_text = st.text_area(
+                    "Rules (규칙)",
+                    value=st.session_state["r_input"],
+                    height=280,
+                )
 
-            # 3. 결과 표시 화면 분할
-            res_col1, res_col2 = st.columns([2, 1])
+            query_text = st.text_input(
+                "Query (질의)",
+                value=st.session_state["q_input"],
+            )
 
-            with res_col1:
-                st.subheader("📚 지식 베이스 (KB Facts)")
-                # 보기 좋게 정렬하여 출력
+            run_button = st.form_submit_button(
+                "추론 실행 (Run Inference)",
+                use_container_width=True,
+            )
+
+    # --- 실행/결과 영역 (오른쪽) ---
+    with right:
+        st.subheader("결과 (Results)")
+
+        if run_button:
+            # 입력값 세션 저장(다음 rerun에도 유지)
+            st.session_state["f_input"] = facts_text
+            st.session_state["r_input"] = rules_text
+            st.session_state["q_input"] = query_text
+
+            try:
+                parsed_facts = parse_facts_block(facts_text)
+                parsed_rules = parse_rules_block(rules_text)
+                parsed_query = parse_query(query_text)
+
+                kb = KB(facts=parsed_facts, rules=parsed_rules)
+                kb.forward_chain()
+
                 display_facts = sorted([f"{f[0]}({', '.join(f[1:])})" for f in kb.facts])
-                st.write(display_facts)
-
-            with res_col2:
-                st.subheader("🔍 질의 결과 (Substitutions)")
                 query_results = kb.query(parsed_query)
 
-                if query_results:
-                    st.table(query_results)
-                else:
-                    st.info("매칭되는 결과가 없습니다.")
+                st.session_state["last_facts"] = display_facts
+                st.session_state["last_query_results"] = query_results
 
-        except ParseError as e:
-            st.error(f"⚠️ 파싱 에러 (Parse Error): {e}")
-        except Exception as e:
-            st.error(f"⚠️ 실행 에러 (Runtime Error): {e}")
+                st.success("추론이 성공적으로 완료되었습니다!")
+
+            except ParseError as e:
+                st.error(f"⚠️ 파싱 에러 (Parse Error): {e}")
+            except Exception as e:
+                st.error(f"⚠️ 실행 에러 (Runtime Error): {e}")
+
+        # 최근 결과 표시(버튼 누른 뒤에도 유지)
+        if "last_facts" in st.session_state:
+            st.markdown("**지식 베이스 (KB Facts)**")
+            st.write(st.session_state["last_facts"])
+        else:
+            st.info("아직 결과가 없습니다. 왼쪽에서 입력 후 실행하세요.")
+
+        if "last_query_results" in st.session_state:
+            st.markdown("**질의 결과 (Substitutions)**")
+            if st.session_state["last_query_results"]:
+                st.table(st.session_state["last_query_results"])
+            else:
+                st.info("매칭되는 결과가 없습니다.")
 
 
 if __name__ == "__main__":
